@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "875329124291",
+    "firebase_url": "https://escoly-org-default-rtdb.firebaseio.com",
+    "project_id": "escoly-org",
+    "storage_bucket": "escoly-org.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:875329124291:android:bf487e7e3a550aaabe2f76",
+        "android_client_info": {
+          "package_name": "com.example.escoly3"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1CgpqV87b_tebdhtpWA7YG4BflNO9vn8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
