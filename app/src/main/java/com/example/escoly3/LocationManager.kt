@@ -76,6 +76,8 @@ class LocationManager(private val context: Context) {
         }
     }
 
+    //HOLA ---
+
     fun stopLocationUpdates() {
         locationCallback?.let {
             fusedClient.removeLocationUpdates(it)
