@@ -13,8 +13,8 @@ buildscript {
 }
 
 plugins {
-    id("com.android.application") version "8.1.2" apply false // Misma versión que en buildscript
-    id("org.jetbrains.kotlin.android") version "1.9.10" apply false
+    id("com.android.application") version "8.1.3" apply false // Misma versión que en buildscript
+    id("org.jetbrains.kotlin.android") version "1.9.20" apply false
     id("com.google.gms.google-services") version "4.4.2" apply false
 }
 

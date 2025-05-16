@@ -1,18 +1,18 @@
 package com.example.escoly3
 
 import android.app.Application
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 
 class MainApplication : Application() {
 
     companion object {
         lateinit var auth: FirebaseAuth
+        val database by lazy { Firebase.database.reference } // Añadido para acceso directo
     }
 
     override fun onCreate() {
@@ -22,7 +22,6 @@ class MainApplication : Application() {
 
     private fun initializeFirebase() {
         try {
-            // Verificar si Firebase ya está inicializado
             if (FirebaseApp.getApps(this).isEmpty()) {
                 FirebaseApp.initializeApp(this)
                 auth = Firebase.auth
@@ -31,9 +30,7 @@ class MainApplication : Application() {
             }
         } catch (e: Exception) {
             Log.e("Firebase", "Error en inicialización", e)
-            Handler(Looper.getMainLooper()).postDelayed({
-                initializeFirebase() // Reintento después de 3 segundos
-            }, 3000)
+            // Eliminado el reintento automático (manejarlo desde UI)
         }
     }
 
@@ -44,9 +41,7 @@ class MainApplication : Application() {
             }
             .addOnFailureListener { e ->
                 Log.e("Auth", "❌ Falló autenticación: ${e.message}")
-                Handler(Looper.getMainLooper()).postDelayed({
-                    attemptAnonymousAuth() // Reintento después de 5 segundos
-                }, 5000)
+                // Eliminado el reintento automático (manejarlo desde UI)
             }
     }
 }

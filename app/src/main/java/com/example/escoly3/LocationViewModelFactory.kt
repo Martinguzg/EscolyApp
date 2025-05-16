@@ -8,11 +8,14 @@ class LocationViewModelFactory(
     private val locationManager: LocationManager,
     private val context: Context
 ) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
+
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(LocationViewModel::class.java)) {
-            return LocationViewModel(locationManager, context) as T
+            return LocationViewModel(
+                locationManager = locationManager,
+                context = context
+            ) as T
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+        throw IllegalArgumentException("ViewModel class desconocida")
     }
 }
