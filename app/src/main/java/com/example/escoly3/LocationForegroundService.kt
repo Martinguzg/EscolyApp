@@ -91,7 +91,7 @@ class LocationForegroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Escoly3 - Rastreo Activo")
             .setContentText("Dispositivo: $deviceId")
-            .setSmallIcon(R.drawable.logo)
+            .setSmallIcon(R.drawable.app_logo)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
