@@ -169,4 +169,3 @@ class LocationManager(private val context: Context) {
         private const val RETRY_DELAY_MS = 10000L // 10 segundos en milisegundos
     }
 }
-

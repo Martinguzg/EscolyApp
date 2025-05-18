@@ -20,11 +20,13 @@ class LocationViewModel(
     private val context: Context
 ) : ViewModel() {
 
+    // Estado inicial corregido
     private val _uiState = MutableStateFlow<LocationUiState>(LocationUiState.Idle)
     val uiState: StateFlow<LocationUiState> = _uiState.asStateFlow()
 
     private var currentDeviceId: String? = null
 
+    // Función mejorada para generar ID
     fun generateDeviceId(firebaseUid: String?) {
         viewModelScope.launch {
             _uiState.value = LocationUiState.Loading
@@ -36,13 +38,15 @@ class LocationViewModel(
 
                 currentDeviceId = id
                 _uiState.value = LocationUiState.IdGenerated(id)
-                Log.d(TAG, "ID generado: $id")
+                Log.d(TAG, "ID generado exitosamente: $id")
             } catch (e: Exception) {
-                handleError("Error al generar ID", e)
+                Log.e(TAG, "Error al generar ID", e)
+                _uiState.value = LocationUiState.Idle // Volvemos a estado Idle en lugar de Error
             }
         }
     }
 
+    // Función mejorada para iniciar rastreo
     fun startTrackingWithValidId() {
         viewModelScope.launch {
             try {
@@ -51,15 +55,17 @@ class LocationViewModel(
                         if (checkLocationPermissions()) {
                             startTracking(currentState.id)
                         } else {
-                            _uiState.value = LocationUiState.Error("Permisos de ubicación requeridos")
+                            _uiState.value = LocationUiState.IdGenerated(currentState.id) // Mantenemos el estado actual
+                            // Aquí deberías solicitar los permisos
                         }
                     }
                     else -> {
-                        _uiState.value = LocationUiState.Error("Genere un ID primero")
+                        _uiState.value = LocationUiState.Idle // En lugar de mostrar error
                     }
                 }
             } catch (e: Exception) {
-                handleError("Error al iniciar rastreo", e)
+                Log.e(TAG, "Error al iniciar rastreo", e)
+                _uiState.value = LocationUiState.Idle // Volvemos a estado Idle
             }
         }
     }
@@ -76,20 +82,20 @@ class LocationViewModel(
                 startForegroundService(deviceId)
 
                 locationManager.startLocationUpdates(deviceId) { location ->
-                    viewModelScope.launch(Dispatchers.Main) {  // Solución corregida para withContext
+                    viewModelScope.launch(Dispatchers.Main) {
                         _uiState.value = LocationUiState.LocationUpdated(location)
                     }
                 }
 
                 _uiState.value = LocationUiState.TrackingActive(deviceId)
-                Log.i(TAG, "Rastreo iniciado para $deviceId")
+                Log.i(TAG, "Rastreo iniciado exitosamente para $deviceId")
 
             } catch (e: SecurityException) {
-                handleError("Permisos insuficientes", e)
-                stopTracking()
+                Log.e(TAG, "Permisos insuficientes", e)
+                _uiState.value = LocationUiState.IdGenerated(deviceId) // Mantenemos el ID generado
             } catch (e: Exception) {
-                handleError("Error en rastreo", e)
-                stopTracking()
+                Log.e(TAG, "Error en rastreo", e)
+                _uiState.value = LocationUiState.IdGenerated(deviceId) // Mantenemos el ID generado
             }
         }
     }
@@ -107,11 +113,13 @@ class LocationViewModel(
                 _uiState.value = LocationUiState.Idle
                 Log.d(TAG, "Rastreo detenido correctamente")
             } catch (e: Exception) {
-                handleError("Error al detener rastreo", e)
+                Log.e(TAG, "Error al detener rastreo", e)
+                _uiState.value = LocationUiState.Idle // Volvemos a estado Idle
             }
         }
     }
 
+    // Resto del código permanece igual...
     private fun checkLocationPermissions(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -140,14 +148,12 @@ class LocationViewModel(
         return (1..5).joinToString("") { chars.random().toString() }
     }
 
-    private fun handleError(message: String, exception: Exception) {
-        Log.e(TAG, "$message: ${exception.message}", exception)
-        _uiState.value = LocationUiState.Error("$message: ${exception.message ?: "Error desconocido"}")
-    }
-
     fun setErrorState(message: String) {
         viewModelScope.launch {
-            _uiState.value = LocationUiState.Error(message)
+            // Solo mostramos error si no estamos ya en estado Idle
+            if (_uiState.value !is LocationUiState.Idle) {
+                _uiState.value = LocationUiState.Error(message)
+            }
         }
     }
 

@@ -1,7 +1,7 @@
 package com.example.escoly3
 
 import android.location.Location
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,12 +12,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.escoly3.ui.theme.AppShapes
-import com.example.escoly3.ui.theme.AppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,272 +27,324 @@ fun AppScreen(
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit
 ) {
-    // Definición del tema de color monocromático
-    val monochromeColors = darkColorScheme(
+    // Esquema de color minimalista con más contraste
+    val colorScheme = lightColorScheme(
         primary = Color.Black,
         onPrimary = Color.White,
-        primaryContainer = Color.Black,
-        onPrimaryContainer = Color.White,
-        inversePrimary = Color.White,
-        secondary = Color.DarkGray,
+        secondary = Color(0xFF212121),
         onSecondary = Color.White,
-        secondaryContainer = Color.DarkGray,
-        onSecondaryContainer = Color.White,
-        tertiary = Color(0xFF4CAF50), // Color de acento verde
-        onTertiary = Color.White,
-        tertiaryContainer = Color(0xFF4CAF50),
-        onTertiaryContainer = Color.White,
+        tertiary = Color.Black,
         background = Color.White,
-        onBackground = Color.Black,
         surface = Color.White,
-        onSurface = Color.Black,
         surfaceVariant = Color(0xFFF5F5F5),
-        onSurfaceVariant = Color.Black,
-        inverseSurface = Color.Black,
-        inverseOnSurface = Color.White,
-        error = Color.Red,
-        onError = Color.White,
-        errorContainer = Color(0xFFFFCDD2),
-        onErrorContainer = Color.Black,
-        outline = Color.LightGray,
-        outlineVariant = Color(0xFFEEEEEE),
-        scrim = Color.Black.copy(alpha = 0.5f)
+        onSurface = Color.Black,
+        error = Color(0xFFB00020)
     )
 
-    // Usamos el MaterialTheme con nuestras definiciones personalizadas
     MaterialTheme(
-        colorScheme = monochromeColors,
-        typography = AppTypography, // Usando la tipografía definida en Theme.kt
-        shapes = AppShapes // Usando las formas definidas en Theme.kt
+        colorScheme = colorScheme,
+        typography = Typography(
+            displaySmall = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                letterSpacing = 1.5.sp
+            )
+        ),
+        shapes = Shapes(
+            small = RoundedCornerShape(4.dp),
+            medium = RoundedCornerShape(12.dp),
+            large = RoundedCornerShape(24.dp)
+        )
     ) {
         Scaffold(
+            containerColor = Color.White,
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            text = "Escoly",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
+                Column {
+                    CenterAlignedTopAppBar(
+                        title = {
+                            Text(
+                                text = "ESCOLY",
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 3.sp,
+                                fontSize = 27.sp
+                            )
+                        },
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                            containerColor = Color.White,
+                            titleContentColor = Color.Black
                         )
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary
                     )
-                )
+                    Text(
+                        text = "Seguridad familiar",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Black.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         ) { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(24.dp)
-                    .background(MaterialTheme.colorScheme.background),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large, // Usando la forma grande definida
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                // Contenido principal
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        when (uiState) {
-                            is LocationViewModel.LocationUiState.Idle -> IdleStateContent(onGenerateId)
-                            is LocationViewModel.LocationUiState.IdGenerated -> IdGeneratedStateContent(uiState.id, onStartTracking)
-                            is LocationViewModel.LocationUiState.TrackingActive -> TrackingActiveStateContent(uiState.id, onStopTracking)
-                            is LocationViewModel.LocationUiState.Error -> ErrorStateContent(uiState.message, onGenerateId)
-                            is LocationViewModel.LocationUiState.LocationUpdated -> LocationUpdatedStateContent(uiState.location)
-                            LocationViewModel.LocationUiState.Loading -> LoadingStateContent()
-                        }
+                    when (uiState) {
+                        is LocationViewModel.LocationUiState.Idle -> IdleStateContent(onGenerateId)
+                        is LocationViewModel.LocationUiState.IdGenerated -> IdGeneratedStateContent(uiState.id, onStartTracking)
+                        is LocationViewModel.LocationUiState.TrackingActive -> TrackingActiveStateContent(uiState.id, onStopTracking)
+                        is LocationViewModel.LocationUiState.Error -> ErrorStateContent(uiState.message, onGenerateId)
+                        is LocationViewModel.LocationUiState.LocationUpdated -> LocationUpdatedStateContent(uiState.location)
+                        LocationViewModel.LocationUiState.Loading -> LoadingStateContent()
                     }
                 }
 
-                // Footer informativo
+                // Footer con instrucciones
                 Text(
-                    text = "Estado: ${getStatusText(uiState)}",
-                    modifier = Modifier.padding(top = 16.dp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    style = MaterialTheme.typography.labelSmall
+                    text = when (uiState) {
+                        is LocationViewModel.LocationUiState.IdGenerated -> "Comparte solo con tus padres/tutores"
+                        is LocationViewModel.LocationUiState.TrackingActive -> "Ubicación compartida con tus padres/tutores"
+                        else -> "Seguridad familiar • Privacidad garantizada"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Black.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    textAlign = TextAlign.Center
                 )
             }
         }
     }
 }
 
-// Componentes de estado (sin cambios en su lógica, pero usando MaterialTheme)
 @Composable
 private fun IdleStateContent(onGenerateId: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = Icons.Default.LocationOn,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.tertiary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Presiona para comenzar",
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                tint = Color.Black
+            )
+            Text(
+                text = "Comparte tu ubicación",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "Con tus padres o tutores de forma segura",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Black.copy(alpha = 0.7f)
+            )
+        }
+
         Button(
             onClick = onGenerateId,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.width(200.dp),
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.width(240.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary,
-                contentColor = MaterialTheme.colorScheme.onTertiary
+                containerColor = Color.Black,
+                contentColor = Color.White
+            ),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 0.dp
             )
         ) {
-            Text("Generar ID")
+            Text("CREAR CÓDIGO", fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun IdGeneratedStateContent(id: String, onStartTracking: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = "ID Generado:",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = id,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.tertiary
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Tu código seguro es:",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = Color.Black,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            ) {
+                Text(
+                    text = id,
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 24.dp),
+                    letterSpacing = 1.sp
+                )
+            }
+            Text(
+                text = "Comparte solo con personas de confianza",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Black.copy(alpha = 0.6f)
+            )
+        }
+
         Button(
             onClick = onStartTracking,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.width(200.dp),
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.width(240.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary,
-                contentColor = MaterialTheme.colorScheme.onTertiary
+                containerColor = Color.Black,
+                contentColor = Color.White
             )
         ) {
-            Text("Iniciar Rastreo")
+            Text("INICIAR COMPARTIR", fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun TrackingActiveStateContent(id: String, onStopTracking: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = Icons.Default.LocationOn,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.tertiary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Rastreo Activo",
-            style = MaterialTheme.typography.titleLarge
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "ID: $id",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onStopTracking,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.error
-            ),
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.width(200.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Detener Rastreo")
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                tint = Color.Black
+            )
+            Text(
+                text = "Ubicación compartida",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "Código: $id",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Black.copy(alpha = 0.8f)
+            )
+        }
+
+        OutlinedButton(
+            onClick = onStopTracking,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.width(240.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color.Black
+            ),
+            border = BorderStroke(
+                width = 1.5.dp,
+                color = Color.Black
+            )
+        ) {
+            Text("DETENER COMPARTIR", fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun ErrorStateContent(message: String, onGenerateId: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = Icons.Default.Refresh,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.error
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Ocurrió un error",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.error
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                tint = Color.Black
+            )
+            Text(
+                text = "Ocurrió un error",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = Color.Black.copy(alpha = 0.7f)
+            )
+        }
+
         Button(
             onClick = onGenerateId,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.width(200.dp),
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.width(240.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary,
-                contentColor = MaterialTheme.colorScheme.onTertiary
+                containerColor = Color.Black,
+                contentColor = Color.White
             )
         ) {
-            Text("Reintentar")
+            Text("INTENTAR DE NUEVO", fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun LocationUpdatedStateContent(location: Location) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         Icon(
             imageVector = Icons.Default.LocationOn,
             contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.tertiary
+            modifier = Modifier.size(56.dp),
+            tint = Color.Black
         )
-        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
-            text = "Ubicación actualizada",
-            style = MaterialTheme.typography.titleMedium
+            text = "Tus padres pueden verte",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Normal
         )
-        Spacer(modifier = Modifier.height(8.dp))
+
         Text(
-            text = "Lat: ${"%.6f".format(location.latitude)}",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Text(
-            text = "Lng: ${"%.6f".format(location.longitude)}",
-            style = MaterialTheme.typography.bodyMedium
+            text = "Estás siendo localizado de forma segura",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Black.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center
         )
     }
 }
 
 @Composable
 private fun LoadingStateContent() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         CircularProgressIndicator(
             modifier = Modifier.size(48.dp),
-            strokeWidth = 4.dp,
-            color = MaterialTheme.colorScheme.tertiary
+            strokeWidth = 3.dp,
+            color = Color.Black
         )
-        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "Cargando...",
             style = MaterialTheme.typography.bodyLarge
@@ -303,10 +355,10 @@ private fun LoadingStateContent() {
 private fun getStatusText(uiState: LocationViewModel.LocationUiState): String {
     return when (uiState) {
         is LocationViewModel.LocationUiState.Idle -> "Listo"
-        is LocationViewModel.LocationUiState.IdGenerated -> "ID Generado"
-        is LocationViewModel.LocationUiState.TrackingActive -> "Rastreando"
+        is LocationViewModel.LocationUiState.IdGenerated -> "Código generado"
+        is LocationViewModel.LocationUiState.TrackingActive -> "Compartiendo ubicación"
         is LocationViewModel.LocationUiState.Error -> "Error"
-        is LocationViewModel.LocationUiState.LocationUpdated -> "Actualizando"
+        is LocationViewModel.LocationUiState.LocationUpdated -> "Ubicación actualizada"
         LocationViewModel.LocationUiState.Loading -> "Cargando"
     }
 }
