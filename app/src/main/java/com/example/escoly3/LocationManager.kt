@@ -100,14 +100,14 @@ class LocationManager(private val context: Context) {
             val timestampKey = dateFormat.format(Date())
             val updates = hashMapOf<String, Any>(
                 // Actualiza el estado en la raíz del dispositivo
-                "dispositivos/$deviceId/en_zona_segura" to false,
+                "devices/$deviceId/in_safe_zone" to false,
 
                 // Guarda la ubicación en el historial
-                "dispositivos/$deviceId/historial_ubicacion/$timestampKey" to hashMapOf(
-                    "latitud" to location.latitude,
-                    "longitud" to location.longitude,
-                    "fecha_hora" to ServerValue.TIMESTAMP,
-                    "bateria" to getBatteryLevel()
+                "devices/$deviceId/location_history/$timestampKey" to hashMapOf(
+                    "lat" to location.latitude,
+                    "lng" to location.longitude,
+                    "dateTime" to ServerValue.TIMESTAMP,
+                    "battery" to getBatteryLevel()
                 )
             )
 
