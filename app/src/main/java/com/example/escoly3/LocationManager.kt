@@ -12,7 +12,6 @@ import com.google.firebase.database.ServerValue
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 class LocationManager(private val context: Context) {
     private val database = FirebaseDatabase.getInstance().reference
@@ -121,17 +120,6 @@ class LocationManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error crítico al guardar ubicación", e)
         }
-    }
-
-    private fun createLocationData(location: Location): Map<String, Any> {
-        return hashMapOf(
-            "latitud" to location.latitude,
-            "longitud" to location.longitude,
-            "timestamp" to ServerValue.TIMESTAMP,
-            "precision" to location.accuracy,
-            "velocidad" to location.speed,
-            "fuente" to (location.provider ?: "indeterminada") // Cambiado de "proveedor" a "fuente"
-        )
     }
 
     @SuppressLint("PrivateApi")
