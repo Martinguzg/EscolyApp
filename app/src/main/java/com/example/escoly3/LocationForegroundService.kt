@@ -17,6 +17,7 @@ class LocationForegroundService : Service() {
 
     private var deviceId: String? = null
     private lateinit var wakeLock: PowerManager.WakeLock
+    private lateinit var locationManager: LocationManager
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -32,6 +33,8 @@ class LocationForegroundService : Service() {
         ).apply {
             acquire(10 * 60 * 1000L) // 10 minutos
         }
+
+        locationManager = LocationManager(applicationContext)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -43,6 +46,10 @@ class LocationForegroundService : Service() {
                     return START_STICKY
                 }
                 startForegroundService(deviceId!!)
+
+                locationManager.startLocationUpdates(deviceId!!) { location ->
+                    Log.d(TAG, "Ubicación desde ForegroundService: ${location.latitude}, ${location.longitude}")
+                }
             }
             "STOP_TRACKING_ACTION" -> {
                 stopForeground(true)
