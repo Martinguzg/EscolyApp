@@ -20,6 +20,7 @@ class LocationManager(private val context: Context) {
     private val executor = Executors.newSingleThreadExecutor()
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
     private var currentDeviceId: String? = null
+    private var lastSentTime: Long = 0
 
     @SuppressLint("MissingPermission")
     fun startLocationUpdates(deviceId: String, onLocation: (Location) -> Unit) {
@@ -74,8 +75,14 @@ class LocationManager(private val context: Context) {
                 executor.execute {
                     result.locations.lastOrNull()?.let { location ->
                         if (isLocationAcceptable(location)) {
-                            saveDeviceLocation(deviceId, location)
-                            onLocation(location)
+                            val now = System.currentTimeMillis()
+                            if(now - lastSentTime >= 30000L){
+                                lastSentTime = now
+                                saveDeviceLocation(deviceId, location)
+                                onLocation(location)
+                            }else{
+                                Log.d(TAG, "Actualizacion ignorada: ${now - lastSentTime}ms desde la ultima")
+                            }
                         }
                     }
                 }

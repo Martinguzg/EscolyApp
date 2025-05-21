@@ -45,7 +45,7 @@
             android:name=".LocationForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="location|dataSync"
+            android:foregroundServiceType="location"
             tools:ignore="ForegroundServicePermission" /> <!-- Cambio clave -->
         android:stopWithTask="false"
         android:permission="android.permission.BIND_JOB_SERVICE"/> <!-- Nuevo -->
