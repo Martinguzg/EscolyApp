@@ -1,5 +1,3 @@
-
-
 package com.example.escoly3
 
 import androidx.compose.foundation.Image

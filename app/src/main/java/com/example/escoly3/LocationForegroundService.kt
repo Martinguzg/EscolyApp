@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.example.escoly3
 
 import android.app.Notification
@@ -48,13 +50,18 @@ class LocationForegroundService : Service() {
                 startForegroundService(deviceId!!)
 
                 locationManager.startLocationUpdates(deviceId!!) { location ->
-                    Log.d(TAG, "Ubicación desde ForegroundService: ${location.latitude}, ${location.longitude}")
+                    Log.d(
+                        TAG,
+                        "Ubicación desde ForegroundService: ${location.latitude}, ${location.longitude}"
+                    )
                 }
             }
+
             "STOP_TRACKING_ACTION" -> {
                 stopForeground(true)
                 stopSelf()
             }
+
             else -> {
                 Log.w(TAG, "Acción desconocida recibida: ${intent?.action}")
                 stopSelf()

@@ -6,16 +6,15 @@ import androidx.lifecycle.ViewModelProvider
 
 class LocationViewModelFactory(
     private val locationManager: LocationManager,
-    private val context: Context
+    private val context: Context,
 ) : ViewModelProvider.Factory {
 
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(LocationViewModel::class.java)) {
-            return LocationViewModel(
-                locationManager = locationManager,
-                context = context
-            ) as T
-        }
-        throw IllegalArgumentException("ViewModel class desconocida")
+        return LocationViewModel(
+            locationManager = locationManager,
+            context = context,
+            idManager = IdManager(context) // Nueva línea
+        ) as T
     }
 }

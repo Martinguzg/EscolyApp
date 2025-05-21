@@ -2,6 +2,10 @@ package com.example.escoly3
 
 import android.Manifest
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
@@ -10,14 +14,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-// Asegúrate de tener estas importaciones
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +31,14 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.Modifier
+// Añade estos imports en la sección de imports del MainActivity:
+import androidx.compose.foundation.layout.fillMaxSize
+// Añade estos imports en la sección de imports del MainActivity:
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+
 
 class MainActivity : ComponentActivity() {
     private val auth by lazy { Firebase.auth }
@@ -42,7 +52,6 @@ class MainActivity : ComponentActivity() {
     // Control de estado
     private var isCheckingPermissions = false
     private var isDialogShowing = false
-    private val prefs by lazy { getSharedPreferences("AppPrefs", MODE_PRIVATE) }
 
     // Permisos
     private val basePermissions = arrayOf(
@@ -51,12 +60,12 @@ class MainActivity : ComponentActivity() {
     )
 
     private val backgroundPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        Manifest.permission.ACCESS_BACKGROUND_LOCATION
     } else {
-        emptyArray()
+        null
     }
 
-    private val allRequiredPermissions = basePermissions + backgroundPermission
+    private val allRequiredPermissions = basePermissions + listOfNotNull(backgroundPermission)
 
     // Contracts
     private val basePermissionLauncher = registerForActivityResult(
@@ -67,15 +76,27 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { handleBackgroundPermissionResult(it) }
 
+    // Handler para configuraciones específicas
+    private val deviceSettingsHandler by lazy {
+        DeviceSettingsHandler(
+            context = this,
+            onShowBatteryDialog = { showBatteryOptimizationDialog() }
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createNotificationChannel()
 
         setContent {
             var showWelcomeScreen by remember { mutableStateOf(true) }
 
             if (showWelcomeScreen) {
                 WelcomeScreen(
-                    onTimeout = { showWelcomeScreen = false },
+                    onTimeout = {
+                        showWelcomeScreen = false
+                        viewModel.loadSavedId() // Cargar ID después del splash
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -89,148 +110,45 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        checkBatteryOptimization()
-        checkManufacturerSettings()
+        deviceSettingsHandler.apply {
+            checkManufacturerSettings()
+            checkBatteryOptimization()
+        }
         startOptimizationChecker()
-        checkOnePlusOptimization()
     }
 
-    // Mejora: Función más robusta para verificar optimización OnePlus
-    private fun checkOnePlusOptimization() {
-        if (Build.MANUFACTURER.equals("oneplus", ignoreCase = true)) {
-            lifecycleScope.launch {
-                delay(3000) // Espera para no saturar al usuario
-                if (!isDialogShowing) {
-                    isDialogShowing = true
-                    AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Configuración Especial para OnePlus")
-                        .setMessage("""
-                        1. Ve a Ajustes > Batería > Optimización de batería
-                        2. Selecciona 'Todas las apps'
-                        3. Encuentra esta app y elige 'No optimizar'
-                        4. Activa 'Inicio automático' en Ajustes > Apps
-                        """.trimIndent())
-                        .setPositiveButton("Abrir Ajustes") { _, _ ->
-                            try {
-                                startActivity(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
-                            } catch (e: Exception) {
-                                openAppSettings()
-                            }
-                            isDialogShowing = false
-                        }
-                        .setNegativeButton("Más tarde") { _, _ -> isDialogShowing = false }
-                        .setOnDismissListener { isDialogShowing = false }
-                        .show()
-                }
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "location_channel",
+                "Ubicación en tiempo real",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Canal para notificaciones de ubicación"
             }
+
+            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
-    // Mejora: Optimizado el checker de optimización
     private fun startOptimizationChecker() {
         lifecycleScope.launch {
             while (true) {
-                delay(30_000) // Cada 30 segundos
-                if (!isDialogShowing && isAppOptimized() && isTrackingActive()) {
+                delay(30_000)
+                if (!isDialogShowing && deviceSettingsHandler.isAppOptimized() && isTrackingActive()) {
                     showBatteryOptimizationDialog()
                 }
             }
         }
     }
 
-    private fun isAppOptimized(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            try {
-                val powerManager = getSystemService(PowerManager::class.java)
-                powerManager?.let {
-                    !it.isIgnoringBatteryOptimizations(packageName)
-                } ?: true // Si powerManager es null, asumimos optimizado por seguridad
-            } catch (e: Exception) {
-                Log.e(TAG, "Error al verificar optimización", e)
-                true // Asume optimizado por seguridad si hay error
-            }
-        } else {
-            false // Dispositivos antiguos no tienen esta optimización
-        }
-    }
     private fun isTrackingActive(): Boolean {
         return when (viewModel.uiState.value) {
             is LocationViewModel.LocationUiState.TrackingActive -> true
             is LocationViewModel.LocationUiState.LocationUpdated -> true
             else -> false
         }
-    }
-    // Mejora: Manejo más limpio de configuraciones por fabricante
-    private fun checkManufacturerSettings() {
-        lifecycleScope.launch {
-            delay(2000) // Espera para no saturar al inicio
-
-            when {
-                Build.MANUFACTURER.equals("xiaomi", ignoreCase = true) && !isDialogShowing -> {
-                    showManufacturerGuideDialog(
-                        "Configuración necesaria para Xiaomi",
-                        """
-                        1. Ve a Ajustes > Apps > Esta app
-                        2. Activa 'Autoarranque'
-                        3. En 'Batería' selecciona 'Sin restricciones'
-                        """.trimIndent()
-                    )
-                }
-                Build.MANUFACTURER.equals("huawei", ignoreCase = true) && !isDialogShowing -> {
-                    showManufacturerGuideDialog(
-                        "Configuración necesaria para Huawei",
-                        """
-                        1. Ve a Ajustes > Batería
-                        2. Desactiva 'Administración inteligente'
-                        3. Marca esta app como 'Protegida'
-                        """.trimIndent()
-                    )
-                }
-            }
-        }
-    }
-
-    private fun showManufacturerGuideDialog(title: String, message: String) {
-        isDialogShowing = true
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("Entendido") { _, _ -> isDialogShowing = false }
-            .setOnDismissListener { isDialogShowing = false }
-            .show()
-    }
-
-    private fun checkBatteryOptimization() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && isAppOptimized()) {
-            lifecycleScope.launch {
-                delay(3000) // Espera para mejor UX
-                if (!isDialogShowing) {
-                    showBatteryOptimizationDialog()
-                }
-            }
-        }
-    }
-
-    private fun showBatteryOptimizationDialog() {
-        isDialogShowing = true
-        AlertDialog.Builder(this)
-            .setTitle("Optimización de Batería")
-            .setMessage("Para funcionamiento continuo, desactiva la optimización de batería para esta app")
-            .setPositiveButton("Configurar") { _, _ ->
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error al abrir ajustes de batería", e)
-                    openAppSettings()
-                }
-                isDialogShowing = false
-            }
-            .setNegativeButton("Ignorar") { _, _ -> isDialogShowing = false }
-            .setOnDismissListener { isDialogShowing = false }
-            .show()
     }
 
     override fun onResume() {
@@ -281,7 +199,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleBasePermissionResult(permissions: Map<String, Boolean>) {
         if (permissions.all { it.value }) {
-            if (backgroundPermission.isNotEmpty() && !hasBackgroundPermission()) {
+            if (backgroundPermission != null && !hasBackgroundPermission()) {
                 requestBackgroundPermission()
             } else {
                 if (isLocationEnabled()) {
@@ -380,6 +298,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun showBatteryOptimizationDialog() {
+        isDialogShowing = true
+        AlertDialog.Builder(this)
+            .setTitle("Optimización de Batería")
+            .setMessage("Para funcionamiento continuo, desactiva la optimización de batería para esta app")
+            .setPositiveButton("Configurar") { _, _ ->
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error al abrir ajustes de batería", e)
+                    openAppSettings()
+                }
+                isDialogShowing = false
+            }
+            .setNegativeButton("Ignorar") { _, _ -> isDialogShowing = false }
+            .setOnDismissListener { isDialogShowing = false }
+            .show()
+    }
+
     private fun isLocationEnabled(): Boolean {
         return try {
             val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
@@ -466,5 +406,99 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+    }
+}
+
+class DeviceSettingsHandler(
+    private val context: Context,
+    private val onShowBatteryDialog: () -> Unit
+) {
+    fun checkManufacturerSettings() {
+        when (Build.MANUFACTURER.lowercase()) {
+            "xiaomi" -> setupXiaomi()
+            "huawei" -> setupHuawei()
+            "oppo", "realme", "oneplus" -> setupOppoFamily()
+            "vivo" -> setupVivo()
+            "samsung" -> setupSamsung()
+            else -> checkBatteryOptimization()
+        }
+    }
+
+    fun checkBatteryOptimization() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && isAppOptimized()) {
+            onShowBatteryDialog()
+        }
+    }
+
+    fun isAppOptimized(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val powerManager = context.getSystemService(PowerManager::class.java)
+                powerManager?.isIgnoringBatteryOptimizations(context.packageName) != true
+            } catch (e: Exception) {
+                true
+            }
+        } else false
+    }
+
+    private fun setupXiaomi() {
+        try {
+            Intent().apply {
+                component = ComponentName(
+                    "com.miui.powerkeeper",
+                    "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
+                )
+                context.startActivity(this)
+            }
+            showDialog(
+                "Configuración Xiaomi",
+                "1. Activa 'Autoarranque'\n2. Configura 'Sin restricciones' en Batería"
+            )
+        } catch (e: Exception) {
+            openNormalSettings()
+        }
+    }
+
+    private fun setupHuawei() {
+        showDialog(
+            "Configuración Huawei",
+            "1. Desactiva 'Administración inteligente'\n2. Marca como 'Protegida'"
+        )
+    }
+
+    private fun setupOppoFamily() {
+        showDialog(
+            "Configuración OPPO/Realme/OnePlus",
+            "1. Desactiva 'Optimización de batería'\n2. Activa 'Inicio automático'"
+        )
+    }
+
+    private fun setupVivo() {
+        showDialog(
+            "Configuración Vivo",
+            "1. Desactiva 'Optimización'\n2. Activa 'Ejecución en segundo plano'"
+        )
+    }
+
+    private fun setupSamsung() {
+        showDialog(
+            "Configuración Samsung",
+            "1. 'Optimización no permitida'\n2. Activa 'Ejecutar en segundo plano'"
+        )
+    }
+
+    private fun showDialog(title: String, message: String) {
+        AlertDialog.Builder(context)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Abrir Ajustes") { _, _ -> openNormalSettings() }
+            .setNegativeButton("Más tarde", null)
+            .show()
+    }
+
+    private fun openNormalSettings() {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+        })
     }
 }

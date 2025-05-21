@@ -17,14 +17,17 @@ import kotlinx.coroutines.withContext
 
 class LocationViewModel(
     private val locationManager: LocationManager,
-    private val context: Context
+    private val context: Context,
+    private val idManager: IdManager
 ) : ViewModel() {
 
     // Estado inicial corregido
+    private var currentDeviceId: String? = idManager.getId() // Carga el ID al iniciar
+
     private val _uiState = MutableStateFlow<LocationUiState>(LocationUiState.Idle)
     val uiState: StateFlow<LocationUiState> = _uiState.asStateFlow()
 
-    private var currentDeviceId: String? = null
+
 
     // Función mejorada para generar ID
     fun generateDeviceId(firebaseUid: String?) {
@@ -37,14 +40,26 @@ class LocationViewModel(
                 } ?: generateRandomId()
 
                 currentDeviceId = id
+                idManager.saveId(id) // Guarda usando IdManager
                 _uiState.value = LocationUiState.IdGenerated(id)
-                Log.d(TAG, "ID generado exitosamente: $id")
             } catch (e: Exception) {
-                Log.e(TAG, "Error al generar ID", e)
-                _uiState.value = LocationUiState.Idle // Volvemos a estado Idle en lugar de Error
+                _uiState.value = LocationUiState.Error("Error generando ID")
             }
         }
     }
+
+    fun loadSavedId() {
+        viewModelScope.launch {
+            idManager.getId()?.let { savedId ->
+                currentDeviceId = savedId
+                // Solo actualiza estado si estaba en Idle
+                if (_uiState.value is LocationUiState.Idle) {
+                    _uiState.value = LocationUiState.IdGenerated(savedId)
+                }
+            }
+        }
+    }
+
 
     // Función mejorada para iniciar rastreo
     fun startTrackingWithValidId() {

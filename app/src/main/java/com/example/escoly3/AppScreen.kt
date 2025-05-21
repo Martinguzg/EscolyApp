@@ -2,9 +2,13 @@ package com.example.escoly3
 
 import android.location.Location
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -12,12 +16,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +35,6 @@ fun AppScreen(
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit
 ) {
-    // Esquema de color minimalista con más contraste
     val colorScheme = lightColorScheme(
         primary = Color.Black,
         onPrimary = Color.White,
@@ -90,7 +97,6 @@ fun AppScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // Contenido principal
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -99,20 +105,47 @@ fun AppScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     when (uiState) {
-                        is LocationViewModel.LocationUiState.Idle -> IdleStateContent(onGenerateId)
-                        is LocationViewModel.LocationUiState.IdGenerated -> IdGeneratedStateContent(uiState.id, onStartTracking)
-                        is LocationViewModel.LocationUiState.TrackingActive -> TrackingActiveStateContent(uiState.id, onStopTracking)
-                        is LocationViewModel.LocationUiState.Error -> ErrorStateContent(uiState.message, onGenerateId)
-                        is LocationViewModel.LocationUiState.LocationUpdated -> LocationUpdatedStateContent(uiState.location)
-                        LocationViewModel.LocationUiState.Loading -> LoadingStateContent()
+                        is LocationViewModel.LocationUiState.Idle ->
+                            IdleStateContent(
+                                onGenerateId = onGenerateId
+                            )
+
+                        is LocationViewModel.LocationUiState.IdGenerated ->
+                            IdGeneratedStateContent(
+                                id = uiState.id,
+                                onStartTracking = onStartTracking
+                            )
+
+                        is LocationViewModel.LocationUiState.TrackingActive ->
+                            TrackingActiveStateContent(
+                                id = uiState.id,
+                                onStopTracking = onStopTracking
+                            )
+
+                        is LocationViewModel.LocationUiState.Error ->
+                            ErrorStateContent(
+                                message = uiState.message,
+                                onGenerateId = onGenerateId
+                            )
+
+                        is LocationViewModel.LocationUiState.LocationUpdated ->
+                            TrackingActiveStateContent(
+                                id = (uiState as? LocationViewModel.LocationUiState.TrackingActive)?.id ?: "",
+                                onStopTracking = onStopTracking
+                            )
+
+                        LocationViewModel.LocationUiState.Loading ->
+                            LoadingStateContent()
                     }
                 }
 
-                // Footer con instrucciones
                 Text(
                     text = when (uiState) {
-                        is LocationViewModel.LocationUiState.IdGenerated -> "Comparte solo con tus padres/tutores"
-                        is LocationViewModel.LocationUiState.TrackingActive -> "Ubicación compartida con tus padres/tutores"
+                        is LocationViewModel.LocationUiState.IdGenerated ->
+                            "Comparte solo con tus padres/tutores"
+                        is LocationViewModel.LocationUiState.TrackingActive,
+                        is LocationViewModel.LocationUiState.LocationUpdated -> // Añadimos este caso
+                            "Ubicación compartida con tus padres/tutores"
                         else -> "Seguridad familiar • Privacidad garantizada"
                     },
                     style = MaterialTheme.typography.labelSmall,
@@ -173,6 +206,9 @@ private fun IdleStateContent(onGenerateId: () -> Unit) {
 
 @Composable
 private fun IdGeneratedStateContent(id: String, onStartTracking: () -> Unit) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(32.dp)
@@ -185,23 +221,41 @@ private fun IdGeneratedStateContent(id: String, onStartTracking: () -> Unit) {
                 text = "Tu código seguro es:",
                 style = MaterialTheme.typography.titleMedium
             )
+
             Surface(
                 shape = MaterialTheme.shapes.medium,
                 color = Color.Black,
-                modifier = Modifier.padding(horizontal = 32.dp)
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .clickable {
+                        clipboardManager.setText(AnnotatedString(id))
+                        Toast.makeText(context, "Código copiado", Toast.LENGTH_SHORT).show()
+                    }
             ) {
-                Text(
-                    text = id,
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
+                Row(
                     modifier = Modifier.padding(vertical = 12.dp, horizontal = 24.dp),
-                    letterSpacing = 1.sp
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = id,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copiar",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
+
             Text(
-                text = "Comparte solo con personas de confianza",
-                style = MaterialTheme.typography.bodySmall,
+                text = "Toca el código para copiarlo",
+                style = MaterialTheme.typography.labelSmall,
                 color = Color.Black.copy(alpha = 0.6f)
             )
         }
@@ -224,44 +278,62 @@ private fun IdGeneratedStateContent(id: String, onStartTracking: () -> Unit) {
 private fun TrackingActiveStateContent(id: String, onStopTracking: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(32.dp)
+        verticalArrangement = Arrangement.spacedBy(32.dp),
+        modifier = Modifier.padding(horizontal = 32.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        // Indicador elegante
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(80.dp)
+                .background(
+                    color = Color(0xFFF5F5F5),
+                    shape = CircleShape
+                )
         ) {
             Icon(
                 imageVector = Icons.Default.LocationOn,
                 contentDescription = null,
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier.size(36.dp),
                 tint = Color.Black
-            )
-            Text(
-                text = "Ubicación compartida",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Text(
-                text = "Código: $id",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.Black.copy(alpha = 0.8f)
             )
         }
 
-        OutlinedButton(
-            onClick = onStopTracking,
-            shape = MaterialTheme.shapes.large,
-            modifier = Modifier.width(240.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = Color.Black
-            ),
-            border = BorderStroke(
-                width = 1.5.dp,
-                color = Color.Black
-            )
+        // Contenido textual minimalista
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("DETENER COMPARTIR", fontWeight = FontWeight.Bold)
+            Text(
+                text = "Ubicación compartida",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = 0.5.sp
+            )
+
+            Text(
+                text = "Estás siendo localizado de forma segura",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Black.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            // Código en tipografía monoespaciada para elegancia
+            Text(
+                text = id,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                ),
+                color = Color.Black.copy(alpha = 0.8f),
+                modifier = Modifier.padding(top = 8.dp)
+            )
         }
+
+
     }
+
 }
 
 @Composable
@@ -307,34 +379,6 @@ private fun ErrorStateContent(message: String, onGenerateId: () -> Unit) {
 }
 
 @Composable
-private fun LocationUpdatedStateContent(location: Location) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Default.LocationOn,
-            contentDescription = null,
-            modifier = Modifier.size(56.dp),
-            tint = Color.Black
-        )
-
-        Text(
-            text = "Tus padres pueden verte",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Normal
-        )
-
-        Text(
-            text = "Estás siendo localizado de forma segura",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Black.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
 private fun LoadingStateContent() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -349,16 +393,5 @@ private fun LoadingStateContent() {
             text = "Cargando...",
             style = MaterialTheme.typography.bodyLarge
         )
-    }
-}
-
-private fun getStatusText(uiState: LocationViewModel.LocationUiState): String {
-    return when (uiState) {
-        is LocationViewModel.LocationUiState.Idle -> "Listo"
-        is LocationViewModel.LocationUiState.IdGenerated -> "Código generado"
-        is LocationViewModel.LocationUiState.TrackingActive -> "Compartiendo ubicación"
-        is LocationViewModel.LocationUiState.Error -> "Error"
-        is LocationViewModel.LocationUiState.LocationUpdated -> "Ubicación actualizada"
-        LocationViewModel.LocationUiState.Loading -> "Cargando"
     }
 }
