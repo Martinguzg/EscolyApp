@@ -19,7 +19,7 @@ class LocationForegroundService : Service() {
 
     private var deviceId: String? = null
     private lateinit var wakeLock: PowerManager.WakeLock
-    private lateinit var locationManager: LocationManager
+    private var locationManager: LocationManager = LocationManagerSingleton.get()
 
     override fun onBind(intent: Intent?): IBinder? = null
 

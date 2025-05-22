@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LocationManagerSingleton.initialize(applicationContext)
         createNotificationChannel()
 
         setContent {

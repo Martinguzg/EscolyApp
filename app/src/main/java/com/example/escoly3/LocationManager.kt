@@ -74,6 +74,7 @@ class LocationManager(private val context: Context) {
             override fun onLocationResult(result: LocationResult) {
                 executor.execute {
                     result.locations.lastOrNull()?.let { location ->
+                        Log.d(TAG, "onLocationResult recibido con ${result.locations.size} ubicaciones")
                         if (isLocationAcceptable(location)) {
                             val now = System.currentTimeMillis()
                             if(now - lastSentTime >= 30000L){
@@ -89,6 +90,7 @@ class LocationManager(private val context: Context) {
             }
 
             override fun onLocationAvailability(availability: LocationAvailability) {
+                Log.d(TAG, "¿Está disponible la ubicación? ${availability.isLocationAvailable}")
                 if (!availability.isLocationAvailable) {
                     Log.w(TAG, "Ubicación no disponible temporalmente")
                 }

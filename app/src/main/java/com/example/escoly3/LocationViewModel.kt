@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class LocationViewModel(
-    private val locationManager: LocationManager,
+    private val locationManager: LocationManager = LocationManagerSingleton.get(),
     private val context: Context,
     private val idManager: IdManager
 ) : ViewModel() {
@@ -26,7 +26,6 @@ class LocationViewModel(
 
     private val _uiState = MutableStateFlow<LocationUiState>(LocationUiState.Idle)
     val uiState: StateFlow<LocationUiState> = _uiState.asStateFlow()
-
 
 
     // Función mejorada para generar ID
@@ -95,12 +94,6 @@ class LocationViewModel(
                 }
 
                 startForegroundService(deviceId)
-
-                locationManager.startLocationUpdates(deviceId) { location ->
-                    viewModelScope.launch(Dispatchers.Main) {
-                        _uiState.value = LocationUiState.LocationUpdated(location)
-                    }
-                }
 
                 _uiState.value = LocationUiState.TrackingActive(deviceId)
                 Log.i(TAG, "Rastreo iniciado exitosamente para $deviceId")
