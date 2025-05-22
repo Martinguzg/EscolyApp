@@ -77,7 +77,7 @@ class LocationManager(private val context: Context) {
                         Log.d(TAG, "onLocationResult recibido con ${result.locations.size} ubicaciones")
                         if (isLocationAcceptable(location)) {
                             val now = System.currentTimeMillis()
-                            if(now - lastSentTime >= 30000L){
+                            if(now - lastSentTime >= 4900L){
                                 lastSentTime = now
                                 saveDeviceLocation(deviceId, location)
                                 onLocation(location)
@@ -158,11 +158,11 @@ class LocationManager(private val context: Context) {
 
     companion object {
         private const val TAG = "LocationManager"
-        private const val LOCATION_UPDATE_INTERVAL_MS = 30000L // 30 segundos
-        private const val MIN_UPDATE_INTERVAL_MS = 15000L // 15 segundos
+        private const val LOCATION_UPDATE_INTERVAL_MS = 5000L // 5 segundos
+        private const val MIN_UPDATE_INTERVAL_MS = 2500L // 2.5 segundos
         private const val MAX_ACCEPTABLE_ACCURACY = 50f // 50 metros
         private const val MAX_ACCEPTABLE_SPEED = 50f // 50 m/s (180 km/h)
         private const val MIN_DISPLACEMENT_METERS = 10f // 10 metros
-        private const val RETRY_DELAY_MS = 10000L // 10 segundos en milisegundos
+        private const val RETRY_DELAY_MS = 2500L // 2.5 segundos en milisegundos
     }
 }
