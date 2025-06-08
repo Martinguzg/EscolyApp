@@ -1,4 +1,4 @@
-@file:Suppress("DEPRECATION") // Keep if necessary for other parts not shown
+@file:Suppress("DEPRECATION")
 
 package com.example.escoly3
 
@@ -20,7 +20,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.google.firebase.Firebase // Recommended for newer Firebase SDK
+import com.google.firebase.Firebase
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
@@ -30,12 +30,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// Data class for SafeZone (from your Version 1)
 data class SafeZone(val latitude: Double, val longitude: Double, val radius: Float)
 
 class LocationViewModel(
-    private val locationManager: LocationManager, // Injected, used by ForegroundService
-    private val context: Context, // Application context is generally safer for ViewModels
+    private val locationManager: LocationManager,
+    private val context: Context,
     private val idManager: IdManager
 ) : ViewModel() {
 
@@ -45,16 +44,17 @@ class LocationViewModel(
     val uiState: StateFlow<LocationUiState> = _uiState.asStateFlow()
 
     private var safeZones: List<SafeZone> = emptyList()
-    private lateinit var fusedLocationClientInternal: FusedLocationProviderClient // For ViewModel's own use
-    private var internalLocationCallback: LocationCallback? = null // To store the callback for removal
+    private lateinit var fusedLocationClientInternal: FusedLocationProviderClient
+    private var internalLocationCallback: LocationCallback? = null
+
+    // AGREGADO: Variable para trackear el estado actual
+    private var currentSafeZoneStatus: Boolean? = null
 
     init {
-        // Use applicationContext to avoid leaks if 'context' is an Activity context
         fusedLocationClientInternal = LocationServices.getFusedLocationProviderClient(context.applicationContext)
         loadSafeZones()
-        // Start internal updates for safe zone checking when ViewModel is created
         startInternalLocationUpdates()
-        loadSavedId() // Load saved ID during initialization
+        loadSavedId()
     }
 
     fun generateDeviceId(firebaseUid: String?) {
@@ -85,9 +85,7 @@ class LocationViewModel(
                     _uiState.value = LocationUiState.IdGenerated(savedId)
                 }
             } else {
-                // If no ID is saved, and current state is Idle, remain Idle or handle as new user.
                 if (_uiState.value is LocationUiState.Idle) {
-                    // Optionally, trigger ID generation or prompt user if needed
                     Log.d(TAG, "No saved ID found, ViewModel remains Idle or awaits ID generation.")
                 }
             }
@@ -99,18 +97,15 @@ class LocationViewModel(
             val currentId = currentDeviceId
             if (currentId == null) {
                 Log.w(TAG, "startTrackingWithValidId called but currentDeviceId is null. Attempting to load or generate.")
-                // Attempt to load or prompt for ID generation if appropriate for your UI flow
-                // For now, setting to Idle if ID isn't available.
                 _uiState.value = LocationUiState.Idle
                 return@launch
             }
 
-            if (checkOverallLocationPermissions()) { // Use a consistent permission check
+            if (checkOverallLocationPermissions()) {
                 startTracking(currentId)
             } else {
                 Log.w(TAG, "Permisos de ubicación no concedidos al intentar iniciar rastreo.")
-                _uiState.value = LocationUiState.IdGenerated(currentId) // Stay in IdGenerated, UI should prompt for perms
-                // The UI observing this state should trigger the permission request flow.
+                _uiState.value = LocationUiState.IdGenerated(currentId)
             }
         }
     }
@@ -131,6 +126,7 @@ class LocationViewModel(
                             Log.w(TAG, "Datos de 'house' incompletos o nulos: ${house.key}")
                         }
                     }
+
                     val school = snapshot.child("school")
                     val schoolLat = school.child("lat").getValue(Double::class.java)
                     val schoolLng = school.child("lng").getValue(Double::class.java)
@@ -140,6 +136,7 @@ class LocationViewModel(
                     } else {
                         Log.w(TAG, "Datos de 'school' incompletos o nulos.")
                     }
+
                     safeZones = safeZonesList
                     Log.d(TAG, "Zonas seguras cargadas: ${safeZones.size} zonas.")
                 } catch (e: Exception) {
@@ -153,16 +150,13 @@ class LocationViewModel(
         })
     }
 
-    // Renamed for clarity: ViewModel's internal location updates for safe zones
-    @SuppressLint("MissingPermission") // Permissions should be checked before calling
+    @SuppressLint("MissingPermission")
     fun startInternalLocationUpdates() {
         if (!checkOverallLocationPermissions()) {
             Log.e(TAG, "Permisos de ubicación no concedidos para actualizaciones internas.")
-            // UI should reflect that permissions are needed for this functionality
             return
         }
 
-        // Si ya hay un callback, detenerlo antes de iniciar uno nuevo para evitar duplicados
         if (internalLocationCallback != null) {
             stopInternalLocationUpdates()
         }
@@ -174,7 +168,6 @@ class LocationViewModel(
         internalLocationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.locations.lastOrNull()?.let { location ->
-                    // Log.d(TAG, "InternalLocationUpdate: ${location.latitude}, ${location.longitude}")
                     checkIfInSafeZone(location)
                 }
             }
@@ -200,9 +193,6 @@ class LocationViewModel(
 
     private fun checkIfInSafeZone(location: Location) {
         if (safeZones.isEmpty()) {
-            // Log.d(TAG, "No hay zonas seguras cargadas para verificar.")
-            // Decide default behavior: if no zones, is it "in" or "out"?
-            // Assuming "out" if no zones are defined, so updates continue.
             updateFirebaseSafeZoneStatus(false)
             return
         }
@@ -217,13 +207,14 @@ class LocationViewModel(
             val distanceInMeters = results[0]
             if (distanceInMeters <= zone.radius) {
                 deviceIsInAnySafeZone = true
-                break // Found in a safe zone
+                break
             }
         }
-        // Log.d(TAG, "Device in safe zone: $deviceIsInAnySafeZone")
+
         updateFirebaseSafeZoneStatus(deviceIsInAnySafeZone)
     }
 
+    // CORREGIDO: Ahora solo actualiza si el estado realmente cambió
     private fun updateFirebaseSafeZoneStatus(inSafeZone: Boolean) {
         val deviceId = currentDeviceId
         if (deviceId == null || deviceId.isBlank()) {
@@ -231,63 +222,50 @@ class LocationViewModel(
             return
         }
 
+        // Solo actualizar si el estado ha cambiado
+        if (currentSafeZoneStatus == inSafeZone) {
+            Log.d(TAG, "Estado de zona segura sin cambios para $deviceId: $inSafeZone")
+            return
+        }
+
         val deviceRef = Firebase.database.reference.child("devices").child(deviceId)
         deviceRef.child("in_safe_zone").setValue(inSafeZone)
             .addOnSuccessListener {
-                // Log.d(TAG, "Estado in_safe_zone actualizado a $inSafeZone para $deviceId")
+                currentSafeZoneStatus = inSafeZone // Actualizar el estado local
+                Log.d(TAG, "Estado in_safe_zone actualizado a $inSafeZone para $deviceId")
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Error al actualizar in_safe_zone para $deviceId", e)
             }
-
-        // Esta lógica puede causar ciclos si start/stop no se manejan con cuidado.
-        // Si está en zona segura, detiene las actualizaciones internas (de este ViewModel).
-        // Si está fuera, las inicia (o asegura que estén iniciadas).
-        if (inSafeZone) {
-            if (internalLocationCallback != null) { // Solo detener si estaban activas
-                Log.d(TAG, "Dispositivo en zona segura. Deteniendo actualizaciones internas del ViewModel.")
-                stopInternalLocationUpdates()
-            }
-        } else {
-            if (internalLocationCallback == null) { // Solo iniciar si estaban detenidas
-                Log.d(TAG, "Dispositivo fuera de zona segura. Iniciando/asegurando actualizaciones internas del ViewModel.")
-                startInternalLocationUpdates() // Esto verificará permisos de nuevo
-            }
-        }
     }
 
-    // Renamed for clarity and corrected
     fun stopInternalLocationUpdates() {
         internalLocationCallback?.let {
             fusedLocationClientInternal.removeLocationUpdates(it)
             Log.d(TAG, "Actualizaciones internas de ubicación detenidas.")
         }
-        internalLocationCallback = null // Muy importante para limpiar la referencia
+        internalLocationCallback = null
     }
 
-    // Consolidate permission checking
     private fun checkOverallLocationPermissions(): Boolean {
         val fineLocationGranted = ContextCompat.checkSelfPermission(
             context.applicationContext,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-        // Coarse location is implied if fine is granted, but checking both is okay.
-        // For simplicity, if only fine is strictly needed for PRIORITY_HIGH_ACCURACY:
         return fineLocationGranted
     }
 
-    private fun startTracking(deviceId: String) { // This starts the Foreground Service
+    private fun startTracking(deviceId: String) {
         viewModelScope.launch {
             if (!checkOverallLocationPermissions()) {
                 Log.e(TAG, "startTracking: Permisos insuficientes.")
-                _uiState.value = LocationUiState.IdGenerated(deviceId) // Revert to IdGenerated to prompt for permissions
+                _uiState.value = LocationUiState.IdGenerated(deviceId)
                 return@launch
             }
             _uiState.value = LocationUiState.Loading
             try {
                 startForegroundService(deviceId)
-                // Proporciona el valor inicial para inSafeZone
-                _uiState.value = LocationUiState.TrackingActive(deviceId, false) // O true, según tu lógica inicial
+                _uiState.value = LocationUiState.TrackingActive(deviceId, false)
                 Log.i(TAG, "Rastreo (servicio foreground) iniciado para $deviceId")
             } catch (e: Exception) {
                 Log.e(TAG, "Error en startTracking (al iniciar servicio)", e)
@@ -296,22 +274,18 @@ class LocationViewModel(
         }
     }
 
-    fun stopTracking() { // This stops the Foreground Service
+    fun stopTracking() {
         viewModelScope.launch {
-            val currentId = currentDeviceId // Use the stored ID
+            val currentId = currentDeviceId
             Log.d(TAG, "Solicitando detener rastreo para el dispositivo: $currentId")
             try {
-                // 1. Detener LocationManager (que es usado por el servicio)
-                locationManager.stopLocationUpdates() // LocationManager es el inyectado
+                locationManager.stopLocationUpdates()
 
-                // 2. Enviar comando para detener el servicio foreground
                 val stopIntent = Intent(context.applicationContext, LocationForegroundService::class.java).apply {
                     action = "STOP_TRACKING_ACTION"
-                    // No es necesario pasar deviceId para detener, el servicio debe manejar su estado.
                 }
                 ContextCompat.startForegroundService(context.applicationContext, stopIntent)
 
-                // 3. Detener las actualizaciones internas del ViewModel si estaban activas
                 stopInternalLocationUpdates()
 
                 _uiState.value = if (currentId != null) LocationUiState.IdGenerated(currentId) else LocationUiState.Idle
@@ -337,7 +311,7 @@ class LocationViewModel(
         return (1..5).joinToString("") { chars.random().toString() }
     }
 
-    fun setErrorState(message: String) { // Not currently used, but kept from original
+    fun setErrorState(message: String) {
         viewModelScope.launch {
             if (_uiState.value !is LocationUiState.Idle && _uiState.value !is LocationUiState.IdGenerated) {
                 _uiState.value = LocationUiState.Error(message)
@@ -345,23 +319,17 @@ class LocationViewModel(
         }
     }
 
-    // Asegurarse que el ViewModel limpie sus propios recursos de ubicación
     override fun onCleared() {
         super.onCleared()
         Log.d(TAG, "ViewModel onCleared. Deteniendo actualizaciones internas.")
         stopInternalLocationUpdates()
-        // El locationManager inyectado debe ser manejado por su propio ciclo de vida o el de su Singleton.
-        // El fusedLocationClientInternal no necesita un 'shutdown' explícito como un executor.
     }
 
     sealed class LocationUiState {
-        object Idle : LocationUiState() // Estado inicial o después de detener.
-        object Loading : LocationUiState() // Cargando ID o iniciando rastreo.
-        data class IdGenerated(val id: String) : LocationUiState() // ID listo, rastreo no activo.
-        data class TrackingActive(val id: String, val inSafeZone: Boolean) : LocationUiState() // Rastreo activo vía servicio.
-
-        // LocationUpdated no parece usarse para emitir al UI aquí, las actualizaciones van a Firebase.
-        // data class LocationUpdated(val location: Location) : LocationUiState()
+        object Idle : LocationUiState()
+        object Loading : LocationUiState()
+        data class IdGenerated(val id: String) : LocationUiState()
+        data class TrackingActive(val id: String, val inSafeZone: Boolean) : LocationUiState()
         data class Error(val message: String) : LocationUiState()
     }
 
