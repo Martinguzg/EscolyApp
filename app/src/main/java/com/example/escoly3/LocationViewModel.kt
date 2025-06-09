@@ -30,7 +30,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class SafeZone(val latitude: Double, val longitude: Double, val radius: Float)
+
+// Enum para saber qué tipo de zona segura es
+enum class SafeZoneType {
+    SCHOOL, HOUSE
+}
+
+// Data class actualizada para incluir el tipo
+data class SafeZone(
+    val latitude: Double,
+    val longitude: Double,
+    val radius: Float,
+    val type: SafeZoneType // <-- CAMPO NUEVO
+)
+
+// Enum para saber el estado actual del dispositivo
+private enum class TrackingState {
+    OUTSIDE, IN_SCHOOL, IN_HOUSE
+}
+
 
 class LocationViewModel(
     private val locationManager: LocationManager,
@@ -49,6 +67,8 @@ class LocationViewModel(
 
     // AGREGADO: Variable para trackear el estado actual
     private var currentSafeZoneStatus: Boolean? = null
+    // NUEVA VARIABLE: Para saber si estamos en la escuela, casa o afuera
+    private var currentTrackingState: TrackingState? = null
 
     init {
         fusedLocationClientInternal = LocationServices.getFusedLocationProviderClient(context.applicationContext)
@@ -116,50 +136,37 @@ class LocationViewModel(
             override fun onDataChange(snapshot: DataSnapshot) {
                 val safeZonesList = mutableListOf<SafeZone>()
 
-                // --- 1. Cargar la escuela (esto no cambia, es para todos) ---
+                // Cargar la escuela
                 try {
                     val school = snapshot.child("school")
                     val schoolLat = school.child("lat").getValue(Double::class.java)
                     val schoolLng = school.child("lng").getValue(Double::class.java)
                     val schoolRadius = school.child("radius").getValue(Double::class.java)
                     if (schoolLat != null && schoolLng != null && schoolRadius != null) {
-                        safeZonesList.add(SafeZone(schoolLat, schoolLng, schoolRadius.toFloat()))
-                    } else {
-                        Log.w(TAG, "Datos de 'school' incompletos o nulos.")
+                        safeZonesList.add(SafeZone(schoolLat, schoolLng, schoolRadius.toFloat(), SafeZoneType.SCHOOL)) // Asigna tipo SCHOOL
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Excepción al procesar datos de la escuela", e)
                 }
 
-                // --- 2. Cargar las casas SOLO para el ID del dispositivo actual ---
+                // Cargar las casas del ID del dispositivo actual
                 val deviceId = currentDeviceId
-                if (deviceId.isNullOrBlank()) {
-                    Log.w(TAG, "No se pueden cargar las casas, el ID del dispositivo es nulo.")
-                } else {
-                    // Verificamos si existe un nodo con el ID del dispositivo actual
-                    if (snapshot.child("houses").hasChild(deviceId)) {
-                        // Si existe, entramos a leer solo sus casas (casa_1, casa_2, etc.)
-                        val userHousesSnapshot = snapshot.child("houses").child(deviceId)
-                        userHousesSnapshot.children.forEach { houseSnapshot ->
-                            try {
-                                val lat = houseSnapshot.child("lat").getValue(Double::class.java)
-                                val lng = houseSnapshot.child("lng").getValue(Double::class.java)
-                                val radius = houseSnapshot.child("radius").getValue(Double::class.java)
-                                if (lat != null && lng != null && radius != null) {
-                                    safeZonesList.add(SafeZone(lat, lng, radius.toFloat()))
-                                } else {
-                                    Log.w(TAG, "Datos de 'house' incompletos para ${houseSnapshot.key} en el ID $deviceId")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Excepción al procesar datos de una casa para el ID $deviceId", e)
+                if (!deviceId.isNullOrBlank() && snapshot.child("houses").hasChild(deviceId)) {
+                    val userHousesSnapshot = snapshot.child("houses").child(deviceId)
+                    userHousesSnapshot.children.forEach { houseSnapshot ->
+                        try {
+                            val lat = houseSnapshot.child("lat").getValue(Double::class.java)
+                            val lng = houseSnapshot.child("lng").getValue(Double::class.java)
+                            val radius = houseSnapshot.child("radius").getValue(Double::class.java)
+                            if (lat != null && lng != null && radius != null) {
+                                safeZonesList.add(SafeZone(lat, lng, radius.toFloat(), SafeZoneType.HOUSE)) // Asigna tipo HOUSE
                             }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Excepción al procesar casa para $deviceId", e)
                         }
-                    } else {
-                        Log.d(TAG, "No se encontraron casas para el ID de dispositivo: $deviceId")
                     }
                 }
 
-                // --- 3. Asignar la lista final de zonas seguras ---
                 safeZones = safeZonesList
                 Log.d(TAG, "Zonas seguras cargadas: ${safeZones.size} zonas para el ID: $deviceId")
             }
@@ -212,26 +219,75 @@ class LocationViewModel(
     }
 
     private fun checkIfInSafeZone(location: Location) {
-        if (safeZones.isEmpty()) {
-            updateFirebaseSafeZoneStatus(false)
+        // Si el rastreo no está activo, no hacemos nada.
+        if (_uiState.value !is LocationUiState.TrackingActive) {
             return
         }
 
         val currentLat = location.latitude
         val currentLng = location.longitude
-        var deviceIsInAnySafeZone = false
+        var foundZone: SafeZone? = null
 
         for (zone in safeZones) {
             val results = FloatArray(1)
             Location.distanceBetween(currentLat, currentLng, zone.latitude, zone.longitude, results)
-            val distanceInMeters = results[0]
-            if (distanceInMeters <= zone.radius) {
-                deviceIsInAnySafeZone = true
-                break
+            if (results[0] <= zone.radius) {
+                foundZone = zone
+                break // Encontramos la primera zona, es suficiente
             }
         }
 
-        updateFirebaseSafeZoneStatus(deviceIsInAnySafeZone)
+        val newState = when (foundZone?.type) {
+            SafeZoneType.HOUSE -> TrackingState.IN_HOUSE
+            SafeZoneType.SCHOOL -> TrackingState.IN_SCHOOL
+            null -> TrackingState.OUTSIDE
+        }
+
+        handleStateChange(newState)
+    }
+
+    private fun handleStateChange(newState: TrackingState) {
+        if (currentTrackingState == newState) {
+            return // Si el estado no ha cambiado, no hacemos nada.
+        }
+
+        Log.i(TAG, "Cambio de estado de rastreo: De $currentTrackingState a $newState")
+        val previousState = currentTrackingState
+        currentTrackingState = newState
+
+        when (newState) {
+            TrackingState.OUTSIDE -> {
+                // Si antes estábamos en la escuela, ahora reanudamos el envío a Firebase.
+                if (previousState == TrackingState.IN_SCHOOL) {
+                    Log.d(TAG, "Saliendo de la escuela. Reanudando actualizaciones a Firebase.")
+                    sendServiceCommand("RESUME_FIREBASE_UPDATES")
+                }
+                updateFirebaseSafeZoneStatus(false)
+            }
+            TrackingState.IN_SCHOOL -> {
+                // Al entrar a la escuela, pausamos el envío a Firebase.
+                Log.d(TAG, "Entrando a la escuela. Pausando actualizaciones a Firebase.")
+                sendServiceCommand("PAUSE_FIREBASE_UPDATES")
+                updateFirebaseSafeZoneStatus(true)
+            }
+            TrackingState.IN_HOUSE -> {
+                // Al entrar a una casa, detenemos todo.
+                Log.d(TAG, "Entrando a una casa. Deteniendo el rastreo por completo.")
+                stopTracking() // Esta función ya detiene el servicio y actualiza la UI
+                updateFirebaseSafeZoneStatus(true)
+            }
+        }
+    }
+
+    // Nueva función para enviar comandos al servicio
+    private fun sendServiceCommand(action: String) {
+        val currentId = currentDeviceId ?: return
+        Log.d(TAG, "Enviando comando '$action' al servicio para el dispositivo $currentId")
+        val intent = Intent(context, LocationForegroundService::class.java).apply {
+            this.action = action
+            putExtra("DEVICE_ID", currentId)
+        }
+        ContextCompat.startForegroundService(context, intent)
     }
 
     // CORREGIDO: Ahora solo actualiza si el estado realmente cambió

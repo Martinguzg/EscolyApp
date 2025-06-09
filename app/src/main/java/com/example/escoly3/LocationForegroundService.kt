@@ -44,54 +44,64 @@ class LocationForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand recibido con acción: ${intent?.action}")
 
-        when (intent?.action) {
-            "START_TRACKING_ACTION" -> {
-                deviceId = intent.getStringExtra("DEVICE_ID")
-                if (deviceId == null || deviceId!!.isBlank()) {
-                    Log.e(TAG, "ID de dispositivo no proporcionado o inválido.")
-                    stopSelf() // Detener el servicio si no hay deviceId
-                    return START_NOT_STICKY // No reiniciar si falta información esencial
-                }
-
-                Log.i(TAG, "Iniciando rastreo para el dispositivo: $deviceId")
-                startForegroundServiceNotification(deviceId!!) // Renombrado para claridad
-
-                // Iniciar actualizaciones de ubicación.
-                // LocationManager ahora está configurado para una sola actualización.
-                // Si necesitas rastreo continuo, LocationManager debe ser ajustado.
-                locationManager.startLocationUpdates(deviceId!!) { location ->
-                    Log.d(
-                        TAG,
-                        "Ubicación desde ForegroundService ($deviceId): ${location.latitude}, ${location.longitude}"
-                    )
-                    // Dado que LocationManager está configurado para UNA SOLA ACTUALIZACIÓN,
-                    // el servicio podría detenerse o necesitar lógica adicional si se espera rastreo continuo.
-                    // Si el objetivo es una sola ubicación, esto está bien.
-                    // Si el objetivo es rastreo continuo, LocationManager necesita ser configurado para ello
-                    // y este servicio no debería detenerse después de una sola ubicación.
-                }
-            }
-
-            "STOP_TRACKING_ACTION" -> {
-                Log.i(TAG, "Deteniendo rastreo para el dispositivo: $deviceId")
-                locationManager.stopLocationUpdates() // Detener locationManager
-                stopForeground(true) // true para remover la notificación
-                stopSelf() // Detener el servicio
-                deviceId = null // Limpiar deviceId
-            }
-
-            else -> {
-                Log.w(TAG, "Acción desconocida o nula recibida: ${intent?.action}")
-                // Si el intent es nulo (puede pasar con START_STICKY y el servicio siendo recreado),
-                // o la acción es desconocida, detener el servicio para evitar comportamiento indefinido.
-                stopSelf()
-                return START_NOT_STICKY // No tiene sentido reiniciar sin una acción válida
+        // Extraer el deviceId si está disponible.
+        intent?.getStringExtra("DEVICE_ID")?.let {
+            if (it.isNotBlank()) {
+                deviceId = it
             }
         }
-        // Si el servicio es terminado por el sistema, se recreará y se volverá a entregar el último Intent.
-        // Esto es útil para que intente reiniciar el rastreo si fue interrumpido.
+
+        // --- CAMBIO CLAVE: SIEMPRE INICIAR EN FOREGROUND SI LA ACCIÓN ES DE INICIO ---
+        // Si la acción es iniciar, SIEMPRE debemos llamar a startForeground PRIMERO.
+        if (intent?.action == ACTION_START_TRACKING) {
+            if (deviceId.isNullOrBlank()) {
+                Log.e(TAG, "ID de dispositivo no proporcionado para iniciar. Deteniendo servicio.")
+                stopSelf() // No podemos iniciar sin ID
+                return START_NOT_STICKY
+            }
+            Log.i(TAG, "Iniciando servicio en primer plano para el dispositivo: $deviceId")
+            // Esta llamada ahora es lo primero que se hace, cumpliendo la regla de Android.
+            startForegroundServiceNotification(deviceId!!)
+        }
+
+        // Si el servicio no tiene un deviceId en este punto y la acción no es para detenerse,
+        // no tiene sentido que continúe.
+        if (deviceId.isNullOrBlank() && intent?.action != ACTION_STOP_TRACKING) {
+            Log.e(TAG, "El servicio no puede operar sin un Device ID. Deteniéndose.")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        // Ahora procesamos la acción
+        when (intent?.action) {
+            ACTION_START_TRACKING -> {
+                Log.i(TAG, "Iniciando actualizaciones de ubicación para: $deviceId")
+                locationManager.startLocationUpdates(deviceId!!) { location ->
+                    Log.d(TAG, "Ubicación (desde Service) para $deviceId: ${location.latitude}")
+                }
+            }
+            ACTION_STOP_TRACKING -> {
+                Log.i(TAG, "Deteniendo rastreo para el dispositivo: $deviceId")
+                locationManager.stopLocationUpdates()
+                stopForeground(STOP_FOREGROUND_REMOVE) // Usar esta constante
+                stopSelf()
+                deviceId = null
+            }
+            ACTION_PAUSE_FIREBASE_UPDATES -> {
+                Log.i(TAG, "Pausando actualizaciones de ubicación a Firebase para $deviceId")
+                locationManager.stopLocationUpdates()
+            }
+            ACTION_RESUME_FIREBASE_UPDATES -> {
+                Log.i(TAG, "Reanudando actualizaciones de ubicación a Firebase para $deviceId")
+                locationManager.startLocationUpdates(deviceId!!) { location ->
+                    Log.d(TAG, "Ubicación (tras reanudar) para $deviceId: ${location.latitude}")
+                }
+            }
+        }
+
         return START_REDELIVER_INTENT
     }
+
 
     private fun startForegroundServiceNotification(deviceId: String) { // Renombrado
         try {
@@ -162,6 +172,10 @@ class LocationForegroundService : Service() {
         private const val TAG = "LocationForegroundSvc"
         private const val CHANNEL_ID = "location_tracking_channel_escoly3"
         private const val NOTIFICATION_ID = 1001 // Debe ser > 0
+        const val ACTION_START_TRACKING = "START_TRACKING_ACTION"
+        const val ACTION_STOP_TRACKING = "STOP_TRACKING_ACTION"
+        const val ACTION_PAUSE_FIREBASE_UPDATES = "PAUSE_FIREBASE_UPDATES" // <-- NUEVA
+        const val ACTION_RESUME_FIREBASE_UPDATES = "RESUME_FIREBASE_UPDATES" // <-- NUEVA
 
         fun startService(context: Context, deviceId: String) {
             if (deviceId.isBlank()) {
