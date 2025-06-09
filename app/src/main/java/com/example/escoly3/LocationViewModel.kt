@@ -115,18 +115,9 @@ class LocationViewModel(
         safeZonesRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val safeZonesList = mutableListOf<SafeZone>()
-                try {
-                    snapshot.child("houses").children.forEach { house ->
-                        val latitude = house.child("latitude").getValue(Double::class.java)
-                        val longitude = house.child("longitude").getValue(Double::class.java)
-                        val radius = house.child("radius").getValue(Double::class.java)
-                        if (latitude != null && longitude != null && radius != null) {
-                            safeZonesList.add(SafeZone(latitude, longitude, radius.toFloat()))
-                        } else {
-                            Log.w(TAG, "Datos de 'house' incompletos o nulos: ${house.key}")
-                        }
-                    }
 
+                // --- 1. Cargar la escuela (esto no cambia, es para todos) ---
+                try {
                     val school = snapshot.child("school")
                     val schoolLat = school.child("lat").getValue(Double::class.java)
                     val schoolLng = school.child("lng").getValue(Double::class.java)
@@ -136,12 +127,41 @@ class LocationViewModel(
                     } else {
                         Log.w(TAG, "Datos de 'school' incompletos o nulos.")
                     }
-
-                    safeZones = safeZonesList
-                    Log.d(TAG, "Zonas seguras cargadas: ${safeZones.size} zonas.")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Excepción al procesar datos de zonas seguras", e)
+                    Log.e(TAG, "Excepción al procesar datos de la escuela", e)
                 }
+
+                // --- 2. Cargar las casas SOLO para el ID del dispositivo actual ---
+                val deviceId = currentDeviceId
+                if (deviceId.isNullOrBlank()) {
+                    Log.w(TAG, "No se pueden cargar las casas, el ID del dispositivo es nulo.")
+                } else {
+                    // Verificamos si existe un nodo con el ID del dispositivo actual
+                    if (snapshot.child("houses").hasChild(deviceId)) {
+                        // Si existe, entramos a leer solo sus casas (casa_1, casa_2, etc.)
+                        val userHousesSnapshot = snapshot.child("houses").child(deviceId)
+                        userHousesSnapshot.children.forEach { houseSnapshot ->
+                            try {
+                                val lat = houseSnapshot.child("lat").getValue(Double::class.java)
+                                val lng = houseSnapshot.child("lng").getValue(Double::class.java)
+                                val radius = houseSnapshot.child("radius").getValue(Double::class.java)
+                                if (lat != null && lng != null && radius != null) {
+                                    safeZonesList.add(SafeZone(lat, lng, radius.toFloat()))
+                                } else {
+                                    Log.w(TAG, "Datos de 'house' incompletos para ${houseSnapshot.key} en el ID $deviceId")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Excepción al procesar datos de una casa para el ID $deviceId", e)
+                            }
+                        }
+                    } else {
+                        Log.d(TAG, "No se encontraron casas para el ID de dispositivo: $deviceId")
+                    }
+                }
+
+                // --- 3. Asignar la lista final de zonas seguras ---
+                safeZones = safeZonesList
+                Log.d(TAG, "Zonas seguras cargadas: ${safeZones.size} zonas para el ID: $deviceId")
             }
 
             override fun onCancelled(error: DatabaseError) {
