@@ -27,6 +27,8 @@ class LocationManager(private val context: Context) {
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
     private var currentDeviceId: String? = null
     private var lastSentTime: Long = 0
+    @Volatile // Importante para que sea seguro entre hilos (threads)
+    private var isPaused = false
 
     @SuppressLint("MissingPermission")
     fun startLocationUpdates(deviceId: String, onLocation: (Location) -> Unit) {
@@ -88,12 +90,31 @@ class LocationManager(private val context: Context) {
         return builder.build()
     }
 
+    fun pauseFirebaseUploads() {
+        Log.d(TAG, "Envío a Firebase PAUSADO.")
+        isPaused = true
+    }
+
+    fun resumeFirebaseUploads() {
+        Log.d(TAG, "Envío a Firebase REANUDADO.")
+        isPaused = false
+    }
+
     private fun createLocationCallback(
         deviceId: String,
         onLocation: (Location) -> Unit
     ): LocationCallback {
         return object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
+                // --- NUEVO ---
+                // Si el envío está pausado, ignoramos la ubicación y salimos de la función.
+                if (isPaused) {
+                    Log.d(TAG, "Recibida ubicación, pero el envío está pausado. Ignorando.")
+                    return
+                }
+                // --- FIN DE LO NUEVO ---
+
+                // El resto del código solo se ejecuta si no está pausado.
                 if (executor.isShutdown) {
                     Log.w(TAG, "Executor apagado, no se procesará onLocationResult para $deviceId.")
                     return
@@ -105,21 +126,22 @@ class LocationManager(private val context: Context) {
                     return
                 }
 
-                Log.d(TAG, "onLocationResult (única vez) para $deviceId. Precisión: ${location.accuracy}. Total ubicaciones en resultado: ${result.locations.size}")
+                // Log informativo (he quitado la palabra "única vez" para evitar confusión)
+                Log.d(TAG, "Recibida ubicación para $deviceId. Precisión: ${location.accuracy}.")
 
                 executor.execute {
                     if (isLocationAcceptable(location)) {
                         val now = System.currentTimeMillis()
                         if (now - lastSentTime >= MIN_INTERVAL_BETWEEN_SAVES_MS) {
                             lastSentTime = now
-                            Log.i(TAG, "Ubicación (única) aceptable para $deviceId. Guardando y notificando.")
+                            Log.i(TAG, "Ubicación aceptable para $deviceId. Guardando y notificando.")
                             saveDeviceLocation(deviceId, location)
                             onLocation(location)
                         } else {
-                            Log.d(TAG, "Actualización (única) para $deviceId (en onLocationResult) ignorada (lastSentTime): ${now - lastSentTime}ms")
+                            Log.d(TAG, "Actualización para $deviceId ignorada por tiempo (lastSentTime): ${now - lastSentTime}ms")
                         }
                     } else {
-                        Log.w(TAG, "Ubicación (única) recibida para $deviceId NO aceptable. Precisión: ${location.accuracy}, Velocidad: ${location.speed}")
+                        Log.w(TAG, "Ubicación recibida para $deviceId NO aceptable. Precisión: ${location.accuracy}, Velocidad: ${location.speed}")
                     }
                 }
             }

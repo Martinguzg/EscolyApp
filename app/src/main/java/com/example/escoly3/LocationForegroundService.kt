@@ -44,61 +44,65 @@ class LocationForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand recibido con acción: ${intent?.action}")
 
-        // Extraer el deviceId si está disponible.
+        // Extraer el deviceId de cualquier intent que lo traiga para mantenerlo actualizado.
         intent?.getStringExtra("DEVICE_ID")?.let {
             if (it.isNotBlank()) {
                 deviceId = it
             }
         }
 
-        // --- CAMBIO CLAVE: SIEMPRE INICIAR EN FOREGROUND SI LA ACCIÓN ES DE INICIO ---
-        // Si la acción es iniciar, SIEMPRE debemos llamar a startForeground PRIMERO.
+        // Si la acción es iniciar, SIEMPRE debemos llamar a startForeground() PRIMERO
+        // para cumplir con las reglas de Android y evitar que la app se cierre.
         if (intent?.action == ACTION_START_TRACKING) {
             if (deviceId.isNullOrBlank()) {
                 Log.e(TAG, "ID de dispositivo no proporcionado para iniciar. Deteniendo servicio.")
-                stopSelf() // No podemos iniciar sin ID
+                stopSelf()
                 return START_NOT_STICKY
             }
             Log.i(TAG, "Iniciando servicio en primer plano para el dispositivo: $deviceId")
-            // Esta llamada ahora es lo primero que se hace, cumpliendo la regla de Android.
             startForegroundServiceNotification(deviceId!!)
         }
 
-        // Si el servicio no tiene un deviceId en este punto y la acción no es para detenerse,
-        // no tiene sentido que continúe.
-        if (deviceId.isNullOrBlank() && intent?.action != ACTION_STOP_TRACKING) {
+        // Si en este punto no tenemos un ID de dispositivo, el servicio no puede operar.
+        if (deviceId.isNullOrBlank()) {
             Log.e(TAG, "El servicio no puede operar sin un Device ID. Deteniéndose.")
+            // No llamamos a stopForeground porque es posible que nunca se haya iniciado.
             stopSelf()
             return START_NOT_STICKY
         }
 
-        // Ahora procesamos la acción
+        // Ahora procesamos la acción correspondiente
         when (intent?.action) {
             ACTION_START_TRACKING -> {
                 Log.i(TAG, "Iniciando actualizaciones de ubicación para: $deviceId")
+                // Nos aseguramos de que el envío no esté pausado al iniciar
+                locationManager.resumeFirebaseUploads()
                 locationManager.startLocationUpdates(deviceId!!) { location ->
                     Log.d(TAG, "Ubicación (desde Service) para $deviceId: ${location.latitude}")
                 }
             }
             ACTION_STOP_TRACKING -> {
-                Log.i(TAG, "Deteniendo rastreo para el dispositivo: $deviceId")
+                Log.i(TAG, "Deteniendo rastreo por completo para el dispositivo: $deviceId")
+                // Aquí sí detenemos todo el proceso de ubicación.
                 locationManager.stopLocationUpdates()
-                stopForeground(STOP_FOREGROUND_REMOVE) // Usar esta constante
+                stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 deviceId = null
             }
             ACTION_PAUSE_FIREBASE_UPDATES -> {
-                Log.i(TAG, "Pausando actualizaciones de ubicación a Firebase para $deviceId")
-                locationManager.stopLocationUpdates()
+                Log.i(TAG, "Pausando el envío de ubicaciones a Firebase para $deviceId")
+                // Solo "silenciamos" el envío, no detenemos el sensor.
+                locationManager.pauseFirebaseUploads()
             }
             ACTION_RESUME_FIREBASE_UPDATES -> {
-                Log.i(TAG, "Reanudando actualizaciones de ubicación a Firebase para $deviceId")
-                locationManager.startLocationUpdates(deviceId!!) { location ->
-                    Log.d(TAG, "Ubicación (tras reanudar) para $deviceId: ${location.latitude}")
-                }
+                Log.i(TAG, "Reanudando el envío de ubicaciones a Firebase para $deviceId")
+                // Solo "quitamos el silencio". No es necesario reiniciar el locationManager.
+                locationManager.resumeFirebaseUploads()
             }
         }
 
+        // Usamos START_REDELIVER_INTENT para que si el sistema mata el servicio,
+        // intente recrearlo y entregarle el último Intent.
         return START_REDELIVER_INTENT
     }
 
